@@ -9,9 +9,9 @@
 #include <type_traits>
 #include <algorithm>
 
-#include <boost/utility/declval.hpp>
 #include <boost/typeof/typeof.hpp>
 #include <boost/type_traits.hpp>
+
 
 
 namespace geomboost{
@@ -32,11 +32,30 @@ HAS_MEMBER_FUNC(has_x, x);
 HAS_MEMBER_FUNC(has_y, y);
 HAS_MEMBER_FUNC(has_z, z);
 
+template <typename T, typename FuncSign>						
+struct has_a{												
+	typedef char yes[1];									
+	typedef char no [2];									
+	template <typename U, U> struct type_check;				
+	template <typename _1> static yes &chk(type_check<FuncSign, &_1::a > *);	
+	template <typename   > static no  &chk(...);							
+	static bool const value = (sizeof(chk<T>(0)) == sizeof(yes));			
+};
+
+template <class T, class R>
+struct real_type_d {};
+
+template <class T, class R>
+struct real_type_d <T, R (T::*)()const> {
+	typedef R return_type;
+};
+
 
 
 template <typename T>
 struct t_traits{
-	typedef BOOST_TYPEOF_TPL(boost::declval<T const&>().x()) real_t;
+	
+	typedef typename real_type_d<T, BOOST_TYPEOF_TPL(&T::x)>::return_type real_t;
 
 	static real_t getx(const T& val){
 		return val.x();
@@ -229,6 +248,18 @@ public:
 	bool isvalid()const{
 		return xmin <= xmax && ymin <= ymax && zmin <= zmax;
 	}
+
+	template <typename T1>
+	T centerpoint(typename std::enable_if<has_z<T1, ZFunc>::value>::type* = 0)const{
+		return makeT<T>((xmin+xmax)/2, (ymin+ymax)/2, (zmin/zmax)/2);
+	}
+
+	template <typename T1>
+	T centerpoint(typename std::enable_if<!has_z<T1, ZFunc>::value>::type* = 0)const{
+		return makeT<T>((xmin+xmax)/2, (ymin+ymax)/2);
+	}
+
+	
 };
 
 
@@ -429,6 +460,21 @@ class closest_point_finder : public t_traits<T>{
 
 	}
 
+	boundingbox<T> binbox(const T& point)const{
+		int xindx = std::max(std::min((int )((getx(point) - bbox.xmin)/binsize), (int)numdivs), (int )0);
+		int yindx = std::max(std::min((int )((gety(point) - bbox.ymin)/binsize), (int)numdivs), (int )0);
+		int zindx = std::max(std::min((int )((getz(point) - bbox.zmin)/binsize), (int)numdivs), (int )0);
+		
+		boundingbox<T> sub_bbox;
+		sub_bbox.xmin = bbox.xmin + xindx * binsize;
+		sub_bbox.ymin = bbox.ymin + yindx * binsize;
+		sub_bbox.zmin = bbox.zmin + zindx * binsize;
+		sub_bbox.xmax = bbox.xmin + binsize;
+		sub_bbox.ymax = bbox.ymin + binsize;
+		sub_bbox.zmax = bbox.zmin + (bbox.zmin < bbox.zmax ? binsize : 0);
+		return sub_bbox;
+	}
+
 
 public:
 
@@ -453,9 +499,7 @@ public:
 		if ( points.size() == 0 )
 			return NULL;
 		bool debugit = false;
-		//DWORD t1, t2, t3;
-		//t1 = GetTickCount();
-
+		
 		unsigned int radius = 0;
 		const T* closepoint = NULL;
 		while(!closepoint) {
@@ -465,13 +509,8 @@ public:
 
 		real_t sqmindist1 = squared_distance(*closepoint, point);
 
-		int xindx = std::max(std::min((int )((getx(point) - bbox.xmin)/binsize), (int)numdivs), (int )0);
-		int yindx = std::max(std::min((int )((gety(point) - bbox.ymin)/binsize), (int)numdivs), (int )0);
-		int zindx = std::max(std::min((int )((getz(point) - bbox.zmin)/binsize), (int)numdivs), (int )0);
-
 		
-		T centerpoint = t_traits<T>::makeT<T>( bbox.xmin + xindx*binsize + binsize/2, 
-						bbox.ymin + yindx*binsize + binsize/2, bbox.zmin + zindx*binsize + binsize/2 );
+		T centerpoint = binbox(point).centerpoint<T>();
 		real_t sqmindist2 = squared_distance(*closepoint, centerpoint);
 		real_t maxradiusf = sqrt(std::max(sqmindist1, sqmindist2))/binsize;
 
@@ -487,12 +526,8 @@ public:
 				real_t maxradiusf = sqrt(std::max(sqmindist1, sqmindist2))/binsize;
 				maxradius = (unsigned int)(maxradiusf) + (maxradiusf > floor(maxradiusf) ? 1 : 0);
 			}
-			//debugit = true;
 		}
 		
-		//t2 =  GetTickCount();
-		//if(debugit)
-			//cout << "POINT " << point << " TIME = " << t2-t1 << endl;
 		return closepoint;
 	}
 
@@ -579,21 +614,3 @@ public:
 }//namespace
 
 #endif
-
-
-/* 
-	typedef float (T::*FloatType)()const;
-	typedef double (T::*DoubleType)()const;
-
-
-	template <typename std::enable_if< has_x<T, DoubleType>::value>::type>
-	struct realdef{
-		typedef double real_t;
-	};
-
-	template <typename std::enable_if< has_x<T, FloatType>::value>::type>
-	struct realdef{
-		typedef float real_t;
-	};
-
-	typedef realdef::real_t real_t;*/

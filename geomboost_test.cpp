@@ -1,6 +1,7 @@
 #include <geomboost.h>
 #include <vector>
 #include <iostream>
+#include <random>
 #include <time.h>
 
 #include <map>
@@ -11,6 +12,22 @@
 
 
 static const float PI = 3.14159265358979323846f;
+
+typedef std::complex<float> cfloat;
+
+
+
+struct pointxy
+{
+	float xl;
+	float yl;
+	float x()const{
+		return xl;
+	}
+	float y()const{
+		return yl;
+	}
+};
 
 struct testpoint2{
 	float xl,yl,zl;
@@ -107,6 +124,25 @@ static void test_on_sphere(float avgradius, float thickness, int numtests){
 }
 
 
+static void test_random_distributions(int numgen){
+	srand ((unsigned int)5);
+	vector<pointxy> vecpxy;
+	std::default_random_engine generator;
+	std::poisson_distribution<int> pd(20);
+	for (int ii = 0; ii < numgen; ++ii){
+		 int numpoints =  pd(generator);
+		 float randpos = (float)rand()/RAND_MAX * 100.0f;
+		 for (int jj = 0; jj < numpoints; ++jj){
+			 pointxy pxy = {randpos + (rand()/RAND_MAX - 0.5f), randpos + (rand()/RAND_MAX - 0.5f)};
+			 vecpxy.push_back(pxy);
+		 }
+	}
+
+	closest_point_finder<pointxy> cpf(vecpxy.begin(), vecpxy.end());
+	pointxy pxy = {50, 25};
+	cpf.find_closest(pxy);
+}
+
 
 void tester_pod_xyz(){
 
@@ -162,7 +198,8 @@ void tester_pod_xyz(){
 } 
 
 int main(){
-	test_on_sphere(5, 2, 100);
+	//test_on_sphere(5, 2, 100);
+	test_random_distributions(1000);
 	return 0;
 
 	 
